@@ -5,7 +5,7 @@
   :author "Kyle Isom <kyle@metacircular.net>"
   :license "MIT License"
   :serial t
-  :depends-on (#:lisp-matrix)
+  :depends-on (#:l-math)
   :components ((:file "package")
                (:file "nnexp")))
 
