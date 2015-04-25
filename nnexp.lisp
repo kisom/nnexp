@@ -8,10 +8,15 @@
 ;;; network; batched RPROP will be used to train the network.
 
 (defconstant +DEFAULT-LIMIT+ 1.0)
+(defconstant +ZERO-TOLERANCE+ 1.e-16)
+(defconstant +Δ-MINIMUM+ 1e-6)
+(defconstant +NEGATIVE-Η+ 0.5)
+(defconstant +POSITIVE-Η+ 1.2)
 
 (defclass layer ()
-  ((bias    :initarg :bias :accessor bias-of)
-   (weights :initarg :weights :accessor weights-of))
+  ((bias      :initarg :bias      :accessor bias-of)
+   (weights   :initarg :weights   :accessor weights-of)
+   (gradients :initarg :gradients :accessor gradients-of))
   (:documentation "A layer contains the weights and bias for a layer in the neural network."))
 
 (defun weight-random (limit)
@@ -33,8 +38,12 @@
 
 (defun make-layer (inputs neurons &key (limit +DEFAULT-LIMIT+))
   (make-instance 'layer
-		 :weights (random-matrix inputs neurons :limit limit :rand #'weight-random)
-		 :bias    (random-vector neurons :limit limit)))
+		 :weights   (random-matrix inputs neurons
+					   :limit limit
+					   :rand #'weight-random)
+		 :bias      (random-vector neurons
+					   :limit limit)
+		 :gradients (lm:make-matrix inputs neurons)))
 
 (defun multiple-p (lst)
   (when (listp lst)
@@ -66,12 +75,6 @@ single output neuron would be built with (MAKE-NETWORK '(2 3 1))."
 	 (make-dimensions dim :limit limit)
 	 (acons :activation :sigmoid nil)))
 
-(defun list->vector (inputs)
-  "Convert a list to a vector. This should be a flat list."
-  (if (and (listp inputs) (every #'atom inputs))
-      (lm:make-vector (length inputs) :initial-elements inputs)
-      (error "Input is not a properly-formed.")))
-
 (defun vector->list (ivec)
   "Convert a vector to a list."
   (let ((output nil))
@@ -84,17 +87,32 @@ single output neuron would be built with (MAKE-NETWORK '(2 3 1))."
    (lm:* imat (weights-of layer))
    (bias-of layer)))
 
+(defun neg (n)
+  (- 0 n))
+
 (defun sigmoid (n)
-  (/ +DEFAULT-LIMIT+
-     (+ +DEFAULT-LIMIT+
-	(exp (- 0 n)))))
+  (/ 1.0
+     (+ 1.0
+	(exp (neg n)))))
+
+(defun sigmoid-gradient (n)
+  (* n (- 1.0 n)))
+
+(defun float-zerop (n)
+  (< (abs n) +ZERO-TOLERANCE+))
+
+(defun sign (n)
+  (cond
+    ((float-zerop n) 0)
+    ((< n 0)        -1)
+    ((> n 0)         1)))
 
 (defun activate-layer (imat layer &key (fn #'sigmoid))
   (let ((neurons (forward-inputs imat layer))
 	(outputs nil))
     (dotimes (i (lm:dimension neurons))
       (push (funcall fn (lm:elt neurons i)) outputs))
-    (list->vector outputs)))
+    (lm:to-vector outputs)))
 
 (defun activate-network (network inputs)
   "Forward the inputs through the network. The inputs should be a
@@ -102,9 +120,8 @@ list; the function will output a list of neuron layers where the first
 element is the network's output and the last element is the input. All
 the neuron layers are returned as L-MATH vectors suitable for passing
 to the training function."
-  (let ((neuron-layers (list (list->vector inputs))))
+  (let ((neuron-layers (list (lm:to-vector inputs))))
     (dolist (layer (cdr (assoc :layers network)))
-      (describe layer)
       (push (activate-layer (car neuron-layers) layer) neuron-layers))
     neuron-layers))
 
@@ -112,3 +129,5 @@ to the training function."
   (dolist (layer (cdr (assoc :layers net)))
     (describe layer)
     (format t "============================~%")))
+
+
