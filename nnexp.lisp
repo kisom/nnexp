@@ -67,10 +67,17 @@ single output neuron would be built with (MAKE-NETWORK '(2 3 1))."
 	 (acons :activation :sigmoid nil)))
 
 (defun list->vector (inputs)
-  "Convert a list to a matrix. This should be a flat list."
+  "Convert a list to a vector. This should be a flat list."
   (if (and (listp inputs) (every #'atom inputs))
       (lm:make-vector (length inputs) :initial-elements inputs)
       (error "Input is not a properly-formed.")))
+
+(defun vector->list (ivec)
+  "Convert a vector to a list."
+  (let ((output nil))
+    (dotimes (i (lm:dimension ivec))
+      (push (lm:elt ivec i) output))
+    (nreverse output)))
 
 (defun forward-inputs (imat layer)
   (lm:-
@@ -87,7 +94,7 @@ single output neuron would be built with (MAKE-NETWORK '(2 3 1))."
 	(outputs nil))
     (dotimes (i (lm:dimension neurons))
       (push (funcall fn (lm:elt neurons i)) outputs))
-    (lm:make-vector (lm:dimension neurons) :initial-elements outputs)))
+    (list->vector outputs)))
 
 (defun activate-network (network inputs)
   "Forward the inputs through the network. The inputs should be a
