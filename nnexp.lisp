@@ -66,11 +66,11 @@ single output neuron would be built with (MAKE-NETWORK '(2 3 1))."
 	 (make-dimensions dim :limit limit)
 	 (acons :activation :sigmoid nil)))
 
-(defun input-vector (inputs)
-  "Convert a list of inputs to a matrix."
-  (if (listp inputs)
+(defun list->vector (inputs)
+  "Convert a list to a matrix. This should be a flat list."
+  (if (and (listp inputs) (every #'atom inputs))
       (lm:make-vector (length inputs) :initial-elements inputs)
-      inputs))
+      (error "Input is not a properly-formed.")))
 
 (defun forward-inputs (imat layer)
   (lm:-
@@ -95,8 +95,7 @@ list; the function will output a list of neuron layers where the first
 element is the network's output and the last element is the input. All
 the neuron layers are returned as L-MATH vectors suitable for passing
 to the training function."
-  (let* ((imat          (input-vector inputs))
-	 (neuron-layers (list imat)))
+  (let ((neuron-layers (list (list->vector inputs))))
     (dolist (layer (cdr (assoc :layers network)))
       (describe layer)
       (push (activate-layer (car neuron-layers) layer) neuron-layers))
