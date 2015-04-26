@@ -7,5 +7,6 @@
   :serial t
   :depends-on (#:l-math)
   :components ((:file "package")
-               (:file "nnexp")))
+               (:file "nnexp")
+	       (:file "rprop")))
 

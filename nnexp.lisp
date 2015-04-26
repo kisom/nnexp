@@ -10,13 +10,16 @@
 (defconstant +DEFAULT-LIMIT+ 1.0)
 (defconstant +ZERO-TOLERANCE+ 1.e-16)
 (defconstant +Δ-MINIMUM+ 1e-6)
+(defconstant +Δ-MAXIMUM+ 50)
 (defconstant +NEGATIVE-Η+ 0.5)
 (defconstant +POSITIVE-Η+ 1.2)
+(defconstant +Δ-INITIAL+ 0.1)
 
 (defclass layer ()
   ((bias      :initarg :bias      :accessor bias-of)
    (weights   :initarg :weights   :accessor weights-of)
-   (gradients :initarg :gradients :accessor gradients-of))
+   (gradients :initarg :gradients :accessor gradients-of)
+   (Δ-update  :initarg :Δ         :accessor Δ-of))
   (:documentation "A layer contains the weights and bias for a layer in the neural network."))
 
 (defun weight-random (limit)
@@ -35,6 +38,48 @@
       (dotimes (i n)
 	(push (funcall rand limit) tmplst)))
     (lm:make-matrix m n :initial-elements tmplst)))
+
+(defmacro do-vector (vec fn)
+  (let ((tmp-vec (gensym)))
+    `(let ((,tmp-vec nil))
+       (lm:do-each-vector-element (n ,vec :index-symbol k)
+	 (push (funcall ,fn n) ,tmp-vec))
+       (lm:make-vector (lm:dimension ,vec)
+		       :initial-elements (reverse,tmp-vec)))))
+
+(defmacro do-matrix (mat fn)
+  "Apply fn to each element in the matrix. The function"
+  (let ((tmp-mat (gensym)))
+    `(let ((,tmp-mat nil))
+       (lm:do-each-matrix-element (n ,mat)
+	 (push (funcall ,fn n) ,tmp-mat))
+       (lm:make-matrix (lm:matrix-rows ,mat)
+		       (lm:matrix-cols ,mat)
+		       :initial-elements (reverse,tmp-mat)))))
+
+(defmacro do-matrix2 (mat1 mat2 fn)
+  "Apply fn to each element in both matrices. The function must accept
+two arguments of the same type as the matrix elements, and it will
+receive elements of the matrices in the same order they are provided."
+  (let ((tmp-mat (gensym)))
+    `(let ((,tmp-mat nil))
+       (lm:do-each-matrix-element (n ,mat1 i j)
+	 (push (funcall ,fn n (lm:matrix-elt ,mat2 i j)) ,tmp-mat))
+       (lm:make-matrix (lm:matrix-rows ,mat1)
+		       (lm:matrix-cols ,mat1)
+		       :initial-elements (reverse,tmp-mat)))))
+
+(defun Δ0-vector (k)
+  (let ((v nil))
+    (dotimes (i k)
+      (push +Δ-INITIAL+ v))
+    (lm:to-vector v)))
+
+(defun Δ0-matrix (m n)
+  (let ((v nil))
+    (dotimes (i (* m n))
+      (push +Δ-INITIAL+ v))
+    (lm:make-matrix m n :initial-elements v)))
 
 (defun make-layer (inputs neurons &key (limit +DEFAULT-LIMIT+))
   (make-instance 'layer
@@ -75,13 +120,6 @@ single output neuron would be built with (MAKE-NETWORK '(2 3 1))."
 	 (make-dimensions dim :limit limit)
 	 (acons :activation :sigmoid nil)))
 
-(defun vector->list (ivec)
-  "Convert a vector to a list."
-  (let ((output nil))
-    (dotimes (i (lm:dimension ivec))
-      (push (lm:elt ivec i) output))
-    (nreverse output)))
-
 (defun forward-inputs (imat layer)
   (lm:-
    (lm:* imat (weights-of layer))
@@ -108,11 +146,7 @@ single output neuron would be built with (MAKE-NETWORK '(2 3 1))."
     ((> n 0)         1)))
 
 (defun activate-layer (imat layer &key (fn #'sigmoid))
-  (let ((neurons (forward-inputs imat layer))
-	(outputs nil))
-    (dotimes (i (lm:dimension neurons))
-      (push (funcall fn (lm:elt neurons i)) outputs))
-    (lm:to-vector outputs)))
+  (do-vector (forward-inputs imat layer) fn))
 
 (defun activate-network (network inputs)
   "Forward the inputs through the network. The inputs should be a
