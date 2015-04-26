@@ -45,3 +45,15 @@ to this function, the layer is modified."
       (setf (Δ-of layer) Δij)
       (setf (weights-of layer)
 	    (do-matrix2 (weights-of layer) Δw #'+)))))
+
+(defun reduce-vector (v fn &key (initial-value 0))
+  (let ((result initial-value))
+    (dotimes (i (lm:dimension v))
+      (setf result (funcall fn result (lm:elt v i))))
+    result))
+
+(defun rprop (network results expected)
+  (let ((ess (reduce-vector (lm:- (first results) (lm:to-vector expected))
+			    (lambda (acc n) (+ acc (* n n))))))
+    
+    ess))
